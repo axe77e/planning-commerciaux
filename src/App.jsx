@@ -210,6 +210,14 @@ function ModalRdv({onClose,onSave,onDelete,commerciaux,defaultComm,defaultCrenea
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}>
       <div style={{background:"#fff",borderRadius:16,padding:28,width:340,boxShadow:"0 8px 40px rgba(0,0,0,0.2)"}}>
         <h3 style={{margin:"0 0 16px",fontSize:17,fontWeight:700,color:"#1e293b"}}>{isEdit?"Modifier le rendez-vous":"Nouveau rendez-vous"}</h3>
+        <label style={labelStyle}>Commercial</label>
+        <select value={commercial} onChange={e=>setCommercial(e.target.value)} style={inputStyle}>
+          {commerciaux.map(c=><option key={c} value={c}>{c}</option>)}
+        </select>
+        <label style={labelStyle}>Créneau</label>
+        <select value={creneau} onChange={e=>setCreneau(e.target.value)} style={inputStyle}>
+          {CRENEAUX.map(cr=><option key={cr} value={cr}>{cr}</option>)}
+        </select>
         <label style={labelStyle}>Code postal</label>
         <input value={codePostal} onChange={e=>setCodePostal(e.target.value)} placeholder="19100" className="cp-input" style={{...inputStyle,fontSize:20,fontWeight:800,textAlign:"center",padding:"12px 10px",letterSpacing:1}} maxLength={5} inputMode="numeric"/>
         {codePostal.length>=2&&<div style={{fontSize:11,marginTop:3,textAlign:"center",color:dept?"#10B981":"#EF4444"}}>{dept?`✓ ${DEPARTEMENTS[dept].label}`:"⚠️ Département non reconnu"}</div>}
@@ -511,10 +519,29 @@ function VueCalendrier({planning,commerciaux,jours,onRenameJour,filtreComm,setFi
               rdvsTous.push({...rdv,cr});
             });
           });
+          // Calcule pour chaque créneau les commerciaux encore libres ce jour-là
+          const dispoParCreneau = CRENEAUX.map(cr=>{
+            const occupes=new Set((planning[j]?.[cr]||[]).map(r=>r.commercial));
+            const libres=commerciaux.filter(c=>!occupes.has(c));
+            return {cr, libres};
+          });
+
           return(
             <div key={j} style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.08)"}}>
               <div style={{background:"#1e293b",color:"#fff",fontWeight:800,fontSize:12,padding:"7px 10px",textAlign:"center"}}>
                 <JourLabel label={j} onRename={v=>onRenameJour(ji,v)}/>
+              </div>
+              <div style={{padding:"6px 8px",borderBottom:"1px solid #f1f5f9",background:"#f8fafc"}}>
+                {dispoParCreneau.map(({cr,libres})=>(
+                  <div key={cr} style={{display:"flex",alignItems:"flex-start",gap:4,marginBottom:3,fontSize:9}}>
+                    <span style={{fontWeight:800,color:"#475569",minWidth:34}}>{cr}</span>
+                    {libres.length>0?(
+                      <span style={{color:"#10B981",fontWeight:600,lineHeight:1.4}}>{libres.join(", ")}</span>
+                    ):(
+                      <span style={{color:"#EF4444",fontWeight:600}}>complet</span>
+                    )}
+                  </div>
+                ))}
               </div>
               <div style={{padding:6,minHeight:80}}>
                 {rdvsTous.length===0&&<div style={{fontSize:11,color:"#cbd5e1",textAlign:"center",marginTop:12}}>— vide —</div>}
@@ -626,9 +653,9 @@ export default function App(){
   },[]);
 
   // Sauvegarde automatique à chaque changement (sauf au premier chargement)
-  useEffect(()=>{ console.log("EFFECT jours",isFirstLoad.current,jours); if(!isFirstLoad.current) saveData("jours",jours); },[jours]);
-  useEffect(()=>{ console.log("EFFECT commerciaux",isFirstLoad.current); if(!isFirstLoad.current) saveData("commerciaux",commerciaux); },[commerciaux]);
-  useEffect(()=>{ console.log("EFFECT planning",isFirstLoad.current,planning); if(!isFirstLoad.current) saveData("planning",planning); },[planning]);
+  useEffect(()=>{ if(!isFirstLoad.current) saveData("jours",jours); },[jours]);
+  useEffect(()=>{ if(!isFirstLoad.current) saveData("commerciaux",commerciaux); },[commerciaux]);
+  useEffect(()=>{ if(!isFirstLoad.current) saveData("planning",planning); },[planning]);
   useEffect(()=>{ if(!isFirstLoad.current) saveData("seuils",seuils); },[seuils]);
   useEffect(()=>{ if(!isFirstLoad.current) saveData("marges",margesState); },[margesState]);
   useEffect(()=>{ if(!isFirstLoad.current) saveData("departements",departements); },[departements]);
@@ -795,3 +822,4 @@ export default function App(){
     </div>
   );
 }
+
