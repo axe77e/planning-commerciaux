@@ -738,12 +738,23 @@ export default function App(){
     setModal(null);
   }
   function handleSave(data){
-    const{jour,creneau,rdvEdit}=modal;
+    const{jour,rdvEdit}=modal;
+    const creneauCible=data.creneau; // utilise le créneau choisi dans le formulaire, pas celui de la case cliquée
     setPlanning(prev=>{
+      const newPrev={...prev,[jour]:{...prev[jour]}};
       if(rdvEdit){
-        return{...prev,[jour]:{...prev[jour],[creneau]:(prev[jour][creneau]||[]).map(r=>r.id===rdvEdit.id?data:r)}};
+        // Si le créneau a changé en édition, on retire du vieux créneau et on ajoute au nouveau
+        const ancienCreneau=modal.creneau;
+        if(ancienCreneau!==creneauCible){
+          newPrev[jour][ancienCreneau]=(newPrev[jour][ancienCreneau]||[]).filter(r=>r.id!==rdvEdit.id);
+          newPrev[jour][creneauCible]=[...(newPrev[jour][creneauCible]||[]),data];
+        } else {
+          newPrev[jour][creneauCible]=(newPrev[jour][creneauCible]||[]).map(r=>r.id===rdvEdit.id?data:r);
+        }
+      } else {
+        newPrev[jour][creneauCible]=[...(newPrev[jour][creneauCible]||[]),data];
       }
-      return{...prev,[jour]:{...prev[jour],[creneau]:[...(prev[jour][creneau]||[]),data]}};
+      return newPrev;
     });
     setModal(null);
   }
