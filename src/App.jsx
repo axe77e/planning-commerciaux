@@ -605,7 +605,12 @@ function PanneauReglages({seuils,setSeuils,marges,setMarges,onClose}){
   );
 }
 
+const MOT_DE_PASSE = "0707";
+
 export default function App(){
+  const[connecte,setConnecte]=useState(()=>sessionStorage.getItem("planning_connecte")==="oui");
+  const[motDePasseInput,setMotDePasseInput]=useState("");
+  const[erreurMdp,setErreurMdp]=useState(false);
   const[vue,setVue]=useState("Jour");
   const[jours,setJours]=useState([...JOURS_DEFAULT]);
   const[commerciaux,setCommerciaux]=useState(["Commercial A","Commercial B","Commercial C","Commercial D"]);
@@ -751,6 +756,39 @@ export default function App(){
 
   let totalRdv=0,totalConfirmes=0;
   jours.forEach(j=>CRENEAUX.forEach(cr=>(planning[j]?.[cr]||[]).forEach(r=>{totalRdv++;if(r.confirme)totalConfirmes++;})));
+
+  function handleLogin(e){
+    e.preventDefault();
+    if(motDePasseInput===MOT_DE_PASSE){
+      sessionStorage.setItem("planning_connecte","oui");
+      setConnecte(true);
+      setErreurMdp(false);
+    } else {
+      setErreurMdp(true);
+    }
+  }
+
+  if(!connecte){
+    return(
+      <div style={{fontFamily:"'Inter',system-ui,sans-serif",background:"#f1f5f9",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <form onSubmit={handleLogin} style={{background:"#fff",borderRadius:16,padding:32,width:320,boxShadow:"0 8px 40px rgba(0,0,0,0.15)",textAlign:"center"}}>
+          <div style={{fontSize:36,marginBottom:8}}>📅</div>
+          <h2 style={{margin:"0 0 4px",fontSize:18,fontWeight:800,color:"#0f172a"}}>Planning Commerciaux</h2>
+          <p style={{fontSize:12,color:"#64748b",margin:"0 0 20px"}}>Entrez le mot de passe pour accéder au planning</p>
+          <input
+            type="password"
+            value={motDePasseInput}
+            onChange={e=>{setMotDePasseInput(e.target.value);setErreurMdp(false);}}
+            placeholder="Mot de passe"
+            autoFocus
+            style={{width:"100%",padding:"12px 14px",borderRadius:10,border:erreurMdp?"1.5px solid #EF4444":"1.5px solid #e2e8f0",fontSize:16,textAlign:"center",outline:"none",boxSizing:"border-box",marginBottom:10}}
+          />
+          {erreurMdp&&<div style={{color:"#EF4444",fontSize:12,fontWeight:600,marginBottom:10}}>Mot de passe incorrect</div>}
+          <button type="submit" style={{width:"100%",padding:"12px 0",borderRadius:10,border:"none",background:"#3B82F6",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Se connecter</button>
+        </form>
+      </div>
+    );
+  }
 
   if(loading){
     return(
