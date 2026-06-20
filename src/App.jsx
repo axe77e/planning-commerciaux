@@ -8,7 +8,7 @@ const VUES = ["Jour", "Calendrier"];
 const DEPARTEMENTS = {
   "87":{label:"87 – Haute-Vienne",color:"#3B82F6",light:"#DBEAFE"},
   "19":{label:"19 – Corrèze",     color:"#8B5CF6",light:"#EDE9FE"},
-  "24":{label:"24 – Dordogne",    color:"#F59E0B",light:"#FEF3C7"},
+  "24":{label:"24 – Dordogne",    color:"#EA580C",light:"#FFEDD5"},
   "86":{label:"86 – Vienne",      color:"#059669",light:"#D1FAE5"},
   "79":{label:"79 – Deux-Sèvres", color:"#0891B2",light:"#CFFAFE"},
   "23":{label:"23 – Creuse",      color:"#DC2626",light:"#FEE2E2"},
@@ -624,33 +624,51 @@ export default function App(){
   const[departements,setDepartements]=useState(JSON.parse(JSON.stringify(DEPARTEMENTS)));
   const[nomNouveauComm,setNomNouveauComm]=useState("");
   const[blocages,setBlocages]=useState(new Set());
+  const[messageEquipe,setMessageEquipe]=useState("");
+  const[editingMessage,setEditingMessage]=useState(false);
+  const[messageTemp,setMessageTemp]=useState("");
   const[loading,setLoading]=useState(true);
   const isFirstLoad=useRef(true);
 
   // Chargement initial depuis Supabase
+  async function chargerTout(){
+    const[jD,cD,pD,sD,mD,dD,bD,msgD]=await Promise.all([
+      loadData("jours"),
+      loadData("commerciaux"),
+      loadData("planning"),
+      loadData("seuils"),
+      loadData("marges"),
+      loadData("departements"),
+      loadData("blocages"),
+      loadData("messageEquipe"),
+    ]);
+    if(jD)setJours(jD);
+    if(cD)setCommerciaux(cD);
+    if(pD)setPlanning(pD);
+    if(sD)setSeuils(sD);
+    if(mD)setMargesState(mD);
+    if(dD)setDepartements(dD);
+    if(bD)setBlocages(new Set(bD));
+    if(msgD)setMessageEquipe(msgD);
+  }
+
+  // Chargement initial
   useEffect(()=>{
-    async function chargerTout(){
-      const[jD,cD,pD,sD,mD,dD,bD]=await Promise.all([
-        loadData("jours"),
-        loadData("commerciaux"),
-        loadData("planning"),
-        loadData("seuils"),
-        loadData("marges"),
-        loadData("departements"),
-        loadData("blocages"),
-      ]);
-      if(jD)setJours(jD);
-      if(cD)setCommerciaux(cD);
-      if(pD)setPlanning(pD);
-      if(sD)setSeuils(sD);
-      if(mD)setMargesState(mD);
-      if(dD)setDepartements(dD);
-      if(bD)setBlocages(new Set(bD));
+    async function premierChargement(){
+      await chargerTout();
       isFirstLoad.current=false;
       setLoading(false);
     }
-    chargerTout();
+    premierChargement();
   },[]);
+
+  // Rafraîchissement automatique toutes les 5 secondes (sauf si on est en train d'écrire un message ou d'éditer un RDV)
+  useEffect(()=>{
+    const interval=setInterval(()=>{
+      if(!editingMessage&&!modal) chargerTout();
+    },5000);
+    return ()=>clearInterval(interval);
+  },[editingMessage,modal]);
 
   // Sauvegarde automatique à chaque changement (sauf au premier chargement)
   useEffect(()=>{ if(!isFirstLoad.current) saveData("jours",jours); },[jours]);
@@ -660,6 +678,7 @@ export default function App(){
   useEffect(()=>{ if(!isFirstLoad.current) saveData("marges",margesState); },[margesState]);
   useEffect(()=>{ if(!isFirstLoad.current) saveData("departements",departements); },[departements]);
   useEffect(()=>{ if(!isFirstLoad.current) saveData("blocages",Array.from(blocages)); },[blocages]);
+  useEffect(()=>{ if(!isFirstLoad.current) saveData("messageEquipe",messageEquipe); },[messageEquipe]);
 
   function blocageKey(j,cr,c){return`${j}||${cr}||${c}`;}
   function estBloque(j,cr,c){return blocages.has(blocageKey(j,cr,c));}
@@ -805,6 +824,32 @@ export default function App(){
         <span style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>Double-clic sur un jour pour le renommer</span>
       </div>
 
+      <div style={{maxWidth:1500,margin:"0 auto 12px"}}>
+        {editingMessage?(
+          <div style={{background:"#FEF9E7",border:"1.5px solid #FCD34D",borderRadius:10,padding:"10px 12px"}}>
+            <textarea
+              autoFocus
+              value={messageTemp}
+              onChange={e=>setMessageTemp(e.target.value)}
+              placeholder="Écris un message pour l'équipe : consignes, motivation, rappel..."
+              style={{width:"100%",minHeight:60,border:"none",background:"transparent",fontSize:13,fontWeight:600,color:"#92400E",outline:"none",resize:"vertical",fontFamily:"inherit"}}
+            />
+            <div style={{display:"flex",gap:8,marginTop:6}}>
+              <button onClick={()=>{setMessageEquipe(messageTemp);setEditingMessage(false);}} style={{padding:"5px 14px",borderRadius:7,border:"none",background:"#D97706",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>Enregistrer</button>
+              <button onClick={()=>setEditingMessage(false)} style={{padding:"5px 14px",borderRadius:7,border:"1.5px solid #FCD34D",background:"#fff",color:"#92400E",fontWeight:600,fontSize:12,cursor:"pointer"}}>Annuler</button>
+            </div>
+          </div>
+        ):(
+          <div onClick={()=>{setMessageTemp(messageEquipe);setEditingMessage(true);}} style={{background:messageEquipe?"#FEF9E7":"#f8fafc",border:`1.5px dashed ${messageEquipe?"#FCD34D":"#e2e8f0"}`,borderRadius:10,padding:"10px 12px",cursor:"pointer",minHeight:20}}>
+            {messageEquipe?(
+              <div style={{fontSize:13,fontWeight:600,color:"#92400E",whiteSpace:"pre-wrap"}}>📌 {messageEquipe}</div>
+            ):(
+              <div style={{fontSize:12,color:"#cbd5e1",fontStyle:"italic"}}>+ Cliquer pour écrire un message à l'équipe (consignes, motivation...)</div>
+            )}
+          </div>
+        )}
+      </div>
+
       <div style={{maxWidth:1500,margin:"0 auto 12px",display:"flex",gap:6}}>
         {VUES.map(v=>(
           <button key={v} onClick={()=>setVue(v)} style={{padding:"7px 18px",borderRadius:10,border:"none",cursor:"pointer",fontWeight:700,fontSize:13,background:vue===v?"#0f172a":"#fff",color:vue===v?"#fff":"#64748b",boxShadow:vue===v?"0 2px 8px rgba(0,0,0,0.15)":"none"}}>{v}</button>
@@ -822,4 +867,3 @@ export default function App(){
     </div>
   );
 }
-
