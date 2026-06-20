@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { saveData, loadData } from "./supabaseClient";
 
 const CRENEAUX = ["9h00", "11h00", "14h00", "17h00", "19h30"];
 const JOURS_DEFAULT = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
@@ -596,6 +597,42 @@ export default function App(){
   const[departements,setDepartements]=useState(JSON.parse(JSON.stringify(DEPARTEMENTS)));
   const[nomNouveauComm,setNomNouveauComm]=useState("");
   const[blocages,setBlocages]=useState(new Set());
+  const[loading,setLoading]=useState(true);
+  const isFirstLoad=useRef(true);
+
+  // Chargement initial depuis Supabase
+  useEffect(()=>{
+    async function chargerTout(){
+      const[jD,cD,pD,sD,mD,dD,bD]=await Promise.all([
+        loadData("jours"),
+        loadData("commerciaux"),
+        loadData("planning"),
+        loadData("seuils"),
+        loadData("marges"),
+        loadData("departements"),
+        loadData("blocages"),
+      ]);
+      if(jD)setJours(jD);
+      if(cD)setCommerciaux(cD);
+      if(pD)setPlanning(pD);
+      if(sD)setSeuils(sD);
+      if(mD)setMargesState(mD);
+      if(dD)setDepartements(dD);
+      if(bD)setBlocages(new Set(bD));
+      isFirstLoad.current=false;
+      setLoading(false);
+    }
+    chargerTout();
+  },[]);
+
+  // Sauvegarde automatique à chaque changement (sauf au premier chargement)
+  useEffect(()=>{ console.log("EFFECT jours",isFirstLoad.current,jours); if(!isFirstLoad.current) saveData("jours",jours); },[jours]);
+  useEffect(()=>{ console.log("EFFECT commerciaux",isFirstLoad.current); if(!isFirstLoad.current) saveData("commerciaux",commerciaux); },[commerciaux]);
+  useEffect(()=>{ console.log("EFFECT planning",isFirstLoad.current,planning); if(!isFirstLoad.current) saveData("planning",planning); },[planning]);
+  useEffect(()=>{ if(!isFirstLoad.current) saveData("seuils",seuils); },[seuils]);
+  useEffect(()=>{ if(!isFirstLoad.current) saveData("marges",margesState); },[margesState]);
+  useEffect(()=>{ if(!isFirstLoad.current) saveData("departements",departements); },[departements]);
+  useEffect(()=>{ if(!isFirstLoad.current) saveData("blocages",Array.from(blocages)); },[blocages]);
 
   function blocageKey(j,cr,c){return`${j}||${cr}||${c}`;}
   function estBloque(j,cr,c){return blocages.has(blocageKey(j,cr,c));}
@@ -668,6 +705,17 @@ export default function App(){
 
   let totalRdv=0,totalConfirmes=0;
   jours.forEach(j=>CRENEAUX.forEach(cr=>(planning[j]?.[cr]||[]).forEach(r=>{totalRdv++;if(r.confirme)totalConfirmes++;})));
+
+  if(loading){
+    return(
+      <div style={{fontFamily:"'Inter',system-ui,sans-serif",background:"#f1f5f9",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:32,marginBottom:10}}>📅</div>
+          <div style={{fontSize:14,color:"#64748b",fontWeight:600}}>Chargement du planning…</div>
+        </div>
+      </div>
+    );
+  }
 
   return(
     <div style={{fontFamily:"'Inter',system-ui,sans-serif",background:"#f1f5f9",minHeight:"100vh",padding:"12px 10px"}}>
@@ -747,4 +795,3 @@ export default function App(){
     </div>
   );
 }
-
