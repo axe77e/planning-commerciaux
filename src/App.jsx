@@ -579,7 +579,7 @@ function VueCalendrier({planning,commerciaux,jours,onRenameJour,filtreComm,setFi
                     <tr>
                       <th style={{padding:"4px 3px",fontSize:9,color:"#94a3b8",fontWeight:700,borderBottom:"1px solid #f1f5f9"}}></th>
                       {commerciaux.map(c=>(
-                        <th key={c} style={{padding:"4px 3px",fontSize:9,fontWeight:700,color:"#475569",borderBottom:"1px solid #f1f5f9",borderLeft:"1px solid #f1f5f9"}}>
+                        <th key={c} style={{padding:"6px 4px",fontSize:12,fontWeight:700,color:"#475569",borderBottom:"1px solid #f1f5f9",borderLeft:"1px solid #f1f5f9"}}>
                           <SecteurLabel label={secteurLabels[c]||c} onRename={v=>onRenameSecteur(c,v)}/>
                         </th>
                       ))}
@@ -588,13 +588,13 @@ function VueCalendrier({planning,commerciaux,jours,onRenameJour,filtreComm,setFi
                   <tbody>
                     {CRENEAUX.map(cr=>(
                       <tr key={cr}>
-                        <td style={{padding:"3px",fontSize:9,fontWeight:700,color:"#475569",borderBottom:"1px solid #f1f5f9"}}>{cr}</td>
+                        <td style={{padding:"5px 4px",fontSize:12,fontWeight:700,color:"#475569",borderBottom:"1px solid #f1f5f9"}}>{cr}</td>
                         {commerciaux.map(c=>{
                           const nbRdv=(planning[j]?.[cr]||[]).filter(r=>r.commercial===c).length;
                           return(
                             <td key={c} style={{padding:"3px",textAlign:"center",borderBottom:"1px solid #f1f5f9",borderLeft:"1px solid #f1f5f9"}}>
                               <span style={{
-                                display:"inline-block",fontSize:8,fontWeight:700,padding:"2px 5px",borderRadius:5,minWidth:24,
+                                display:"inline-block",fontSize:13,fontWeight:700,padding:"4px 8px",borderRadius:6,minWidth:36,
                                 background:nbRdv>0?"#f1f5f9":"#D1FAE5",
                                 color:nbRdv>0?"#94a3b8":"#059669"
                               }}>
