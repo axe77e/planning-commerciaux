@@ -153,6 +153,35 @@ function estimerMin(a,b){return Math.round((haversine(a,b)*1.35/70)*60);}
 function getCoords(rdv){return rdv.coords||CENTRES_DEPT[rdv.dept]||null;}
 function getMarge(cr1,cr2,marges){return (marges||MARGES)[`${cr1}-${cr2}`]??null;}
 function formatTemps(min){if(min<60)return`${min}mn`;const h=Math.floor(min/60),m=min%60;return m>0?`${h}h${String(m).padStart(2,"0")}`:`${h}h`;}
+
+// ─── OPENROUTESERVICE (trajets routiers réels) ───────────────────────────────
+const ORS_API_KEY="eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjI2YWQyMzg0MjMzYzRjMDU4MjNiOTYxN2IwMzRmM2ZmIiwiaCI6Im11cm11cjY0In0=";
+const trajetCache={}; // clé "lat1,lng1->lat2,lng2" -> minutes (ou en cours de calcul)
+
+function cleCache(a,b){return`${a[0].toFixed(4)},${a[1].toFixed(4)}->${b[0].toFixed(4)},${b[1].toFixed(4)}`;}
+
+async function getTrajetReel(a,b){
+  if(!a||!b)return null;
+  const key=cleCache(a,b);
+  const keyInverse=cleCache(b,a);
+  if(trajetCache[key]!==undefined)return trajetCache[key];
+  if(trajetCache[keyInverse]!==undefined)return trajetCache[keyInverse];
+  try{
+    const url=`https://api.openrouteservice.org/v2/directions/driving-car?api_key=${ORS_API_KEY}&start=${a[1]},${a[0]}&end=${b[1]},${b[0]}`;
+    const res=await fetch(url);
+    if(!res.ok)throw new Error("ORS error");
+    const data=await res.json();
+    const secondes=data.features[0].properties.segments[0].duration;
+    const min=Math.round(secondes/60);
+    trajetCache[key]=min;
+    return min;
+  }catch(e){
+    // En cas d'échec API, fallback sur l'estimation à vol d'oiseau
+    const min=estimerMin(a,b);
+    trajetCache[key]=min;
+    return min;
+  }
+}
 function trajetStyle(min,seuils){
   const s=seuils||{proche:50,moyen:90};
   if(min<=s.proche)return{label:formatTemps(min),color:"#10B981",bg:"#D1FAE5",icon:"✓"};
@@ -485,6 +514,31 @@ function VueJour({planning,commerciaux,jours,onRenameJour,jourActif,setJourActif
     trajetsByComm[c]=calculerTrajets(rdvsParCr);
   });
 
+  // Affine les trajets avec l'API réelle en arrière-plan (le calcul à vol d'oiseau s'affiche immédiatement, puis se met à jour)
+  const[trajetsReels,setTrajetsReels]=useState({});
+  useEffect(()=>{
+    let annule=false;
+    commerciaux.forEach(c=>{
+      const rdvsParCr={};
+      CRENEAUX.forEach(cr=>{rdvsParCr[cr]=(jourPlanning[cr]||[]).filter(r=>r.commercial===c);});
+      CRENEAUX.forEach((cr1,ci)=>{
+        const rdvs1=rdvsParCr[cr1]||[];
+        CRENEAUX.slice(ci+1).forEach(cr2=>{
+          const rdvs2=rdvsParCr[cr2]||[];
+          rdvs1.forEach((r1,i1)=>rdvs2.forEach((r2,i2)=>{
+            const c1=getCoords(r1),c2=getCoords(r2);
+            if(!c1||!c2)return;
+            const key=`${c}|${cr1}|${i1}|${cr2}|${i2}`;
+            getTrajetReel(c1,c2).then(min=>{
+              if(!annule&&min!==null)setTrajetsReels(prev=>({...prev,[key]:min}));
+            });
+          }));
+        });
+      });
+    });
+    return ()=>{annule=true;};
+  },[jourActif,JSON.stringify(jourPlanning)]);
+
   return(
     <div>
       <div style={{display:"flex",gap:5,marginBottom:14,flexWrap:"wrap"}}>
@@ -520,7 +574,11 @@ function VueJour({planning,commerciaux,jours,onRenameJour,jourActif,setJourActif
                           <RdvCard rdv={rdv} onRemove={()=>onRemove(jourActif,cr,rdv.id)} onToggleConfirm={()=>onToggleConfirm(jourActif,cr,rdv.id)} onEdit={()=>onEdit(jourActif,cr,rdv)}/>
                           {traj.length>0&&(
                             <div style={{display:"flex",flexWrap:"wrap",gap:2,marginBottom:4,paddingLeft:4}}>
-                              {traj.map((t,ti)=><BadgeTrajet key={ti} min={t.min} cr2={t.toCr} seuils={seuils}/>)}
+                              {traj.map((t,ti)=>{
+                                const key=`${c}|${cr}|${ri}|${t.toCr}|${t.toIdx}`;
+                                const minAffiche=trajetsReels[key]??t.min;
+                                return<BadgeTrajet key={ti} min={minAffiche} cr2={t.toCr} seuils={seuils}/>;
+                              })}
                             </div>
                           )}
                         </div>
