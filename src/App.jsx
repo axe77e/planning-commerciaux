@@ -905,6 +905,7 @@ export default function App(){
   let totalRdv=0,totalConfirmes=0;
   jours.forEach(j=>CRENEAUX.forEach(cr=>(planning[j]?.[cr]||[]).forEach(r=>{totalRdv++;if(r.confirme)totalConfirmes++;})));
   const totalRdvJour=CRENEAUX.reduce((acc,cr)=>acc+(planning[jourActif]?.[cr]||[]).length,0);
+  const totalConfirmesJour=CRENEAUX.reduce((acc,cr)=>acc+(planning[jourActif]?.[cr]||[]).filter(r=>r.confirme).length,0);
 
   function handleLogin(e){
     e.preventDefault();
@@ -965,7 +966,7 @@ export default function App(){
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           <div style={{background:"#D1FAE5",color:"#059669",borderRadius:8,padding:"5px 12px",fontWeight:800,fontSize:12}}>{totalRdv} RDV</div>
           <div style={{background:"#DBEAFE",color:"#1D4ED8",borderRadius:8,padding:"5px 12px",fontWeight:800,fontSize:12}}>{jourActif} : {totalRdvJour} RDV</div>
-          <div style={{background:"#FEF3C7",color:"#D97706",borderRadius:8,padding:"5px 12px",fontWeight:800,fontSize:12}}>⭐ {totalConfirmes}</div>
+          <div style={{background:"#FEF3C7",color:"#D97706",borderRadius:8,padding:"5px 12px",fontWeight:800,fontSize:12}}>⭐ {totalConfirmesJour}</div>
           <button onClick={()=>setShowSuggestion(true)} style={{padding:"5px 12px",borderRadius:8,border:"none",background:"#3B82F6",cursor:"pointer",fontWeight:700,fontSize:12,color:"#fff"}}>🎯 Meilleur créneau</button>
           <button onClick={()=>setShowGererComm(v=>!v)} style={{padding:"5px 12px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",cursor:"pointer",fontWeight:600,fontSize:12,color:"#64748b"}}>👥 Commerciaux</button>
           <button onClick={()=>setShowReglages(true)} style={{padding:"5px 12px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",cursor:"pointer",fontWeight:600,fontSize:12,color:"#64748b"}}>⚙️ Réglages</button>
