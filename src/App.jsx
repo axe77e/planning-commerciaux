@@ -590,15 +590,15 @@ function VueCalendrier({planning,commerciaux,jours,onRenameJour,filtreComm,setFi
                       <tr key={cr}>
                         <td style={{padding:"3px",fontSize:9,fontWeight:700,color:"#475569",borderBottom:"1px solid #f1f5f9"}}>{cr}</td>
                         {commerciaux.map(c=>{
-                          const occupe=(planning[j]?.[cr]||[]).some(r=>r.commercial===c);
+                          const nbRdv=(planning[j]?.[cr]||[]).filter(r=>r.commercial===c).length;
                           return(
                             <td key={c} style={{padding:"3px",textAlign:"center",borderBottom:"1px solid #f1f5f9",borderLeft:"1px solid #f1f5f9"}}>
                               <span style={{
-                                display:"inline-block",fontSize:8,fontWeight:700,padding:"2px 5px",borderRadius:5,
-                                background:occupe?"#f1f5f9":"#D1FAE5",
-                                color:occupe?"#94a3b8":"#059669"
+                                display:"inline-block",fontSize:8,fontWeight:700,padding:"2px 5px",borderRadius:5,minWidth:24,
+                                background:nbRdv>0?"#f1f5f9":"#D1FAE5",
+                                color:nbRdv>0?"#94a3b8":"#059669"
                               }}>
-                                {occupe?"Pris":"Libre"}
+                                {nbRdv>0?nbRdv:"Libre"}
                               </span>
                             </td>
                           );
