@@ -497,9 +497,13 @@ function VueJour({planning,commerciaux,jours,onRenameJour,jourActif,setJourActif
       <div style={{display:"grid",gridTemplateColumns:`repeat(${commerciaux.length},1fr)`,gap:10}}>
         {commerciaux.map(c=>{
           const trajets=trajetsByComm[c]||[];
+          const nbRdvJour=CRENEAUX.reduce((acc,cr)=>acc+(jourPlanning[cr]||[]).filter(r=>r.commercial===c).length,0);
           return(
             <div key={c} style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.08)"}}>
-              <div style={{background:"#0f172a",color:"#fff",fontWeight:800,fontSize:13,padding:"8px 12px",textAlign:"center"}}>{c}</div>
+              <div style={{background:"#0f172a",color:"#fff",fontWeight:800,fontSize:13,padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <span>{c}</span>
+                <span style={{fontSize:11,fontWeight:600,color:"#94a3b8"}}>{nbRdvJour}</span>
+              </div>
               {CRENEAUX.map(cr=>{
                 const rdvs=(jourPlanning[cr]||[]).filter(r=>r.commercial===c);
                 const trajetsDuCr=trajets.filter(t=>t.fromCr===cr);
