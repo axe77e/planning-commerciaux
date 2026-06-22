@@ -199,6 +199,15 @@ function ModalRdv({onClose,onSave,onDelete,commerciaux,defaultComm,defaultCrenea
   const[client,setClient]=useState(rdvEdit?.client||"");
   const[codePostal,setCodePostal]=useState(rdvEdit?.codePostal||"");
   const[ville,setVille]=useState(rdvEdit?.ville||"");
+  const[showSuggestionsVille,setShowSuggestionsVille]=useState(false);
+  const suggestionsVille=useMemo(()=>{
+    if(ville.length<2)return[];
+    const n=normalizeName(ville);
+    return Object.keys(COMMUNES_GPS)
+      .filter(k=>normalizeName(k).includes(n))
+      .slice(0,6)
+      .map(k=>k.split(" ").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" "));
+  },[ville]);
   const dept=deptFromCodePostal(codePostal);
   const codePostalComplet=codePostal.length===5;
   const coordsParCP=codePostalComplet?findCoordsByPostal(codePostal):null;
@@ -222,7 +231,28 @@ function ModalRdv({onClose,onSave,onDelete,commerciaux,defaultComm,defaultCrenea
         <input value={codePostal} onChange={e=>setCodePostal(e.target.value)} placeholder="19100" className="cp-input" style={{...inputStyle,fontSize:20,fontWeight:800,textAlign:"center",padding:"12px 10px",letterSpacing:1}} maxLength={5} inputMode="numeric"/>
         {codePostal.length>=2&&<div style={{fontSize:11,marginTop:3,textAlign:"center",color:dept?"#10B981":"#EF4444"}}>{dept?`✓ ${DEPARTEMENTS[dept].label}`:"⚠️ Département non reconnu"}</div>}
         <label style={labelStyle}>Ville</label>
-        <input value={ville} onChange={e=>setVille(e.target.value)} placeholder="ex : Brive-la-Gaillarde" style={inputStyle}/>
+        <div style={{position:"relative"}}>
+          <input
+            value={ville}
+            onChange={e=>{setVille(e.target.value);setShowSuggestionsVille(true);}}
+            onFocus={()=>setShowSuggestionsVille(true)}
+            onBlur={()=>setTimeout(()=>setShowSuggestionsVille(false),150)}
+            placeholder="ex : Brive-la-Gaillarde"
+            style={inputStyle}
+            autoComplete="off"
+          />
+          {showSuggestionsVille&&suggestionsVille.length>0&&(
+            <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:8,marginTop:3,boxShadow:"0 4px 12px rgba(0,0,0,0.1)",zIndex:10,maxHeight:160,overflowY:"auto"}}>
+              {suggestionsVille.map(s=>(
+                <div key={s} onMouseDown={()=>{setVille(s);setShowSuggestionsVille(false);}} style={{padding:"8px 12px",fontSize:13,color:"#1e293b",cursor:"pointer",borderBottom:"1px solid #f1f5f9"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
+                  onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+                  {s}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <label style={labelStyle}>Nom du client</label>
         <input value={client} onChange={e=>setClient(e.target.value)} placeholder="ex : M. Dupont" style={{...inputStyle,fontSize:12,padding:"6px 9px"}}/>
         <div style={{display:"flex",gap:10,marginTop:20}}>
@@ -367,6 +397,22 @@ function JourLabel({label,onRename}){
   );
 }
 
+// Label de secteur éditable pour le mini-tableau du calendrier
+function SecteurLabel({label,onRename}){
+  const[editing,setEditing]=useState(false);
+  const[tmp,setTmp]=useState(label);
+  if(editing) return(
+    <div style={{display:"flex",gap:2,alignItems:"center",justifyContent:"center"}}>
+      <input autoFocus value={tmp} onChange={e=>setTmp(e.target.value)}
+        onKeyDown={e=>{if(e.key==="Enter"){onRename(tmp);setEditing(false);}if(e.key==="Escape")setEditing(false);}}
+        style={{width:50,padding:"1px 3px",borderRadius:4,border:"1px solid #3B82F6",fontSize:9,outline:"none",color:"#0f172a",textAlign:"center"}}/>
+    </div>
+  );
+  return(
+    <span onDoubleClick={()=>{setTmp(label);setEditing(true);}} title="Double-clic pour modifier le secteur" style={{cursor:"pointer"}}>{label}</span>
+  );
+}
+
 // ─── VUE SEMAINE ──────────────────────────────────────────────────────────────
 function VueSemaine({planning,commerciaux,jours,onRenameJour,onAdd,onRemove,onToggleConfirm,onEdit,estBloque,toggleBlocage}){
   const thS={padding:"7px 5px",background:"#0f172a",color:"#fff",fontSize:11,fontWeight:700,textAlign:"center",border:"1px solid #1e293b",whiteSpace:"nowrap"};
@@ -496,7 +542,7 @@ function VueJour({planning,commerciaux,jours,onRenameJour,jourActif,setJourActif
 }
 
 // ─── VUE CALENDRIER ───────────────────────────────────────────────────────────
-function VueCalendrier({planning,commerciaux,jours,onRenameJour,filtreComm,setFiltreComm,filtreDept,setFiltreDept,onAdd,onRemove,onToggleConfirm,onEdit}){
+function VueCalendrier({planning,commerciaux,jours,onRenameJour,filtreComm,setFiltreComm,filtreDept,setFiltreDept,onAdd,onRemove,onToggleConfirm,onEdit,secteurLabels,onRenameSecteur}){
   return(
     <div>
       <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
@@ -519,30 +565,50 @@ function VueCalendrier({planning,commerciaux,jours,onRenameJour,filtreComm,setFi
               rdvsTous.push({...rdv,cr});
             });
           });
-          // Calcule pour chaque créneau les commerciaux encore libres ce jour-là
-          const dispoParCreneau = CRENEAUX.map(cr=>{
-            const occupes=new Set((planning[j]?.[cr]||[]).map(r=>r.commercial));
-            const libres=commerciaux.filter(c=>!occupes.has(c));
-            return {cr, libres};
-          });
 
           return(
             <div key={j} style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.08)"}}>
               <div style={{background:"#1e293b",color:"#fff",fontWeight:800,fontSize:12,padding:"7px 10px",textAlign:"center"}}>
                 <JourLabel label={j} onRename={v=>onRenameJour(ji,v)}/>
               </div>
-              <div style={{padding:"6px 8px",borderBottom:"1px solid #f1f5f9",background:"#f8fafc"}}>
-                {dispoParCreneau.map(({cr,libres})=>(
-                  <div key={cr} style={{display:"flex",alignItems:"flex-start",gap:4,marginBottom:3,fontSize:9}}>
-                    <span style={{fontWeight:800,color:"#475569",minWidth:34}}>{cr}</span>
-                    {libres.length>0?(
-                      <span style={{color:"#10B981",fontWeight:600,lineHeight:1.4}}>{libres.join(", ")}</span>
-                    ):(
-                      <span style={{color:"#EF4444",fontWeight:600}}>complet</span>
-                    )}
-                  </div>
-                ))}
+
+              {/* Mini-tableau secteurs × créneaux */}
+              <div style={{borderBottom:"1px solid #e2e8f0"}}>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead>
+                    <tr>
+                      <th style={{padding:"4px 3px",fontSize:9,color:"#94a3b8",fontWeight:700,borderBottom:"1px solid #f1f5f9"}}></th>
+                      {commerciaux.map(c=>(
+                        <th key={c} style={{padding:"4px 3px",fontSize:9,fontWeight:700,color:"#475569",borderBottom:"1px solid #f1f5f9",borderLeft:"1px solid #f1f5f9"}}>
+                          <SecteurLabel label={secteurLabels[c]||c} onRename={v=>onRenameSecteur(c,v)}/>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {CRENEAUX.map(cr=>(
+                      <tr key={cr}>
+                        <td style={{padding:"3px",fontSize:9,fontWeight:700,color:"#475569",borderBottom:"1px solid #f1f5f9"}}>{cr}</td>
+                        {commerciaux.map(c=>{
+                          const occupe=(planning[j]?.[cr]||[]).some(r=>r.commercial===c);
+                          return(
+                            <td key={c} style={{padding:"3px",textAlign:"center",borderBottom:"1px solid #f1f5f9",borderLeft:"1px solid #f1f5f9"}}>
+                              <span style={{
+                                display:"inline-block",fontSize:8,fontWeight:700,padding:"2px 5px",borderRadius:5,
+                                background:occupe?"#f1f5f9":"#D1FAE5",
+                                color:occupe?"#94a3b8":"#059669"
+                              }}>
+                                {occupe?"Pris":"Libre"}
+                              </span>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
+
               <div style={{padding:6,minHeight:80}}>
                 {rdvsTous.length===0&&<div style={{fontSize:11,color:"#cbd5e1",textAlign:"center",marginTop:12}}>— vide —</div>}
                 {rdvsTous.map(rdv=>{
@@ -551,6 +617,7 @@ function VueCalendrier({planning,commerciaux,jours,onRenameJour,filtreComm,setFi
                     <div key={rdv.id} onClick={()=>onEdit(j,rdv.cr,rdv)} title="Cliquer pour modifier" style={{background:rdv.confirme?"#FDE68A":dep.light,border:`1.5px solid ${rdv.confirme?"#D97706":dep.color}`,borderRadius:7,padding:"4px 7px",marginBottom:4,position:"relative",cursor:"pointer"}}>
                       <div style={{fontSize:10,fontWeight:800,color:rdv.confirme?"#92400E":dep.color}}>{rdv.cr} · {dep.label.split("–")[0].trim()}</div>
                       <div style={{fontSize:10,color:"#374151"}}>{rdv.ville}</div>
+                      {rdv.codePostal&&<div style={{fontSize:9,color:"#94a3b8"}}>{rdv.codePostal}</div>}
                       {rdv.client&&<div style={{fontSize:9,color:"#94a3b8"}}>{rdv.client}</div>}
                       {!filtreComm&&<div style={{fontSize:9,color:"#64748b",fontStyle:"italic"}}>{rdv.commercial}</div>}
                       <div style={{position:"absolute",top:3,right:3,display:"flex",gap:1}}>
@@ -632,12 +699,17 @@ export default function App(){
   const[messageEquipe,setMessageEquipe]=useState("");
   const[editingMessage,setEditingMessage]=useState(false);
   const[messageTemp,setMessageTemp]=useState("");
+  const[secteurLabels,setSecteurLabels]=useState({});
+
+  function renameSecteur(commercial,label){
+    setSecteurLabels(prev=>({...prev,[commercial]:label}));
+  }
   const[loading,setLoading]=useState(true);
   const isFirstLoad=useRef(true);
 
   // Chargement initial depuis Supabase
   async function chargerTout(){
-    const[jD,cD,pD,sD,mD,dD,bD,msgD]=await Promise.all([
+    const[jD,cD,pD,sD,mD,dD,bD,msgD,slD]=await Promise.all([
       loadData("jours"),
       loadData("commerciaux"),
       loadData("planning"),
@@ -646,6 +718,7 @@ export default function App(){
       loadData("departements"),
       loadData("blocages"),
       loadData("messageEquipe"),
+      loadData("secteurLabels"),
     ]);
     if(jD)setJours(jD);
     if(cD)setCommerciaux(cD);
@@ -655,6 +728,7 @@ export default function App(){
     if(dD)setDepartements(dD);
     if(bD)setBlocages(new Set(bD));
     if(msgD)setMessageEquipe(msgD);
+    if(slD)setSecteurLabels(slD);
   }
 
   // Chargement initial
@@ -684,6 +758,7 @@ export default function App(){
   useEffect(()=>{ if(!isFirstLoad.current) saveData("departements",departements); },[departements]);
   useEffect(()=>{ if(!isFirstLoad.current) saveData("blocages",Array.from(blocages)); },[blocages]);
   useEffect(()=>{ if(!isFirstLoad.current) saveData("messageEquipe",messageEquipe); },[messageEquipe]);
+  useEffect(()=>{ if(!isFirstLoad.current) saveData("secteurLabels",secteurLabels); },[secteurLabels]);
 
   function blocageKey(j,cr,c){return`${j}||${cr}||${c}`;}
   function estBloque(j,cr,c){return blocages.has(blocageKey(j,cr,c));}
@@ -875,25 +950,25 @@ export default function App(){
 
       <div style={{maxWidth:1500,margin:"0 auto 12px"}}>
         {editingMessage?(
-          <div style={{background:"#FEF9E7",border:"1.5px solid #FCD34D",borderRadius:10,padding:"10px 12px"}}>
+          <div style={{background:"#FEF9E7",border:"1.5px solid #FCD34D",borderRadius:8,padding:"6px 10px"}}>
             <textarea
               autoFocus
               value={messageTemp}
               onChange={e=>setMessageTemp(e.target.value)}
               placeholder="Écris un message pour l'équipe : consignes, motivation, rappel..."
-              style={{width:"100%",minHeight:60,border:"none",background:"transparent",fontSize:13,fontWeight:600,color:"#92400E",outline:"none",resize:"vertical",fontFamily:"inherit"}}
+              style={{width:"100%",minHeight:28,border:"none",background:"transparent",fontSize:12,fontWeight:600,color:"#92400E",outline:"none",resize:"vertical",fontFamily:"inherit"}}
             />
-            <div style={{display:"flex",gap:8,marginTop:6}}>
-              <button onClick={()=>{setMessageEquipe(messageTemp);setEditingMessage(false);}} style={{padding:"5px 14px",borderRadius:7,border:"none",background:"#D97706",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>Enregistrer</button>
-              <button onClick={()=>setEditingMessage(false)} style={{padding:"5px 14px",borderRadius:7,border:"1.5px solid #FCD34D",background:"#fff",color:"#92400E",fontWeight:600,fontSize:12,cursor:"pointer"}}>Annuler</button>
+            <div style={{display:"flex",gap:6,marginTop:4}}>
+              <button onClick={()=>{setMessageEquipe(messageTemp);setEditingMessage(false);}} style={{padding:"3px 10px",borderRadius:6,border:"none",background:"#D97706",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>Enregistrer</button>
+              <button onClick={()=>setEditingMessage(false)} style={{padding:"3px 10px",borderRadius:6,border:"1.5px solid #FCD34D",background:"#fff",color:"#92400E",fontWeight:600,fontSize:11,cursor:"pointer"}}>Annuler</button>
             </div>
           </div>
         ):(
-          <div onClick={()=>{setMessageTemp(messageEquipe);setEditingMessage(true);}} style={{background:messageEquipe?"#FEF9E7":"#f8fafc",border:`1.5px dashed ${messageEquipe?"#FCD34D":"#e2e8f0"}`,borderRadius:10,padding:"10px 12px",cursor:"pointer",minHeight:20}}>
+          <div onClick={()=>{setMessageTemp(messageEquipe);setEditingMessage(true);}} style={{background:messageEquipe?"#FEF9E7":"#f8fafc",border:`1.5px dashed ${messageEquipe?"#FCD34D":"#e2e8f0"}`,borderRadius:8,padding:"6px 10px",cursor:"pointer"}}>
             {messageEquipe?(
-              <div style={{fontSize:13,fontWeight:600,color:"#92400E",whiteSpace:"pre-wrap"}}>📌 {messageEquipe}</div>
+              <div style={{fontSize:12,fontWeight:600,color:"#92400E",whiteSpace:"pre-wrap"}}>📌 {messageEquipe}</div>
             ):(
-              <div style={{fontSize:12,color:"#cbd5e1",fontStyle:"italic"}}>+ Cliquer pour écrire un message à l'équipe (consignes, motivation...)</div>
+              <div style={{fontSize:11,color:"#cbd5e1",fontStyle:"italic"}}>+ Cliquer pour écrire un message à l'équipe</div>
             )}
           </div>
         )}
@@ -907,7 +982,7 @@ export default function App(){
 
       <div style={{maxWidth:1500,margin:"0 auto"}}>
         {vue==="Jour"&&<VueJour planning={planning} commerciaux={commerciaux} jours={jours} onRenameJour={renameJour} jourActif={jourActif} setJourActif={setJourActif} onAdd={handleAdd} onRemove={handleRemove} onToggleConfirm={handleToggleConfirm} onEdit={handleEdit} estBloque={estBloque} toggleBlocage={toggleBlocage} seuils={seuils}/>}
-        {vue==="Calendrier"&&<VueCalendrier planning={planning} commerciaux={commerciaux} jours={jours} onRenameJour={renameJour} filtreComm={filtreComm} setFiltreComm={setFiltreComm} filtreDept={filtreDept} setFiltreDept={setFiltreDept} onAdd={handleAdd} onRemove={handleRemove} onToggleConfirm={handleToggleConfirm} onEdit={handleEdit}/>}
+        {vue==="Calendrier"&&<VueCalendrier planning={planning} commerciaux={commerciaux} jours={jours} onRenameJour={renameJour} filtreComm={filtreComm} setFiltreComm={setFiltreComm} filtreDept={filtreDept} setFiltreDept={setFiltreDept} onAdd={handleAdd} onRemove={handleRemove} onToggleConfirm={handleToggleConfirm} onEdit={handleEdit} secteurLabels={secteurLabels} onRenameSecteur={renameSecteur}/>}
       </div>
 
       <div style={{maxWidth:1500,margin:"12px auto 0",padding:"8px 14px",background:"#fff",borderRadius:10,fontSize:10,color:"#94a3b8"}}>
