@@ -576,7 +576,7 @@ function VueJour({planning,commerciaux,jours,labelsJours,jourActif,setJourActif,
     <div>
       <div style={{display:"flex",gap:5,marginBottom:14,flexWrap:"wrap"}}>
         {jours.map((j,ji)=>(
-          <button key={j} onClick={()=>setJourActif(j)} style={{padding:"7px 14px",borderRadius:10,border:"none",cursor:"pointer",fontWeight:700,fontSize:12,background:jourActif===j?"#0f172a":"#fff",color:jourActif===j?"#fff":"#64748b",boxShadow:jourActif===j?"0 2px 8px rgba(0,0,0,0.15)":"none"}}>
+          <button key={j} onClick={()=>setJourActif(j)} style={{padding:"9px 18px",borderRadius:10,border:"none",cursor:"pointer",fontWeight:700,fontSize:15,background:jourActif===j?"#0f172a":"#fff",color:jourActif===j?"#fff":"#64748b",boxShadow:jourActif===j?"0 2px 8px rgba(0,0,0,0.15)":"none"}}>
             {labelsJours[j]}
           </button>
         ))}
