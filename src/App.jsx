@@ -3,6 +3,52 @@ import { saveData, loadData } from "./supabaseClient";
 
 const CRENEAUX = ["9h00", "11h00", "14h00", "17h00", "19h30"];
 const JOURS_DEFAULT = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
+const NOMS_JOURS_SEMAINE=["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
+
+// Retourne le lundi de la semaine courante
+function getLundiCourant(){
+  const now=new Date();
+  const day=now.getDay();
+  const diff=day===0?-6:1-day;
+  const l=new Date(now);
+  l.setDate(now.getDate()+diff);
+  l.setHours(0,0,0,0);
+  return l;
+}
+// Retourne le lundi décalé de `offset` semaines par rapport à aujourd'hui
+function getLundiOffset(offset){
+  const l=getLundiCourant();
+  l.setDate(l.getDate()+offset*7);
+  return l;
+}
+// Génère les 6 dates (lundi→samedi) d'une semaine donnée par son offset
+function getDatesSemaine(offset){
+  const lundi=getLundiOffset(offset);
+  return Array.from({length:6},(_,i)=>{
+    const d=new Date(lundi);
+    d.setDate(lundi.getDate()+i);
+    return d;
+  });
+}
+// Clé stable et unique pour une date : "2026-06-23"
+function dateKey(d){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+// Label affiché : "Lundi 23"
+function dateLabel(d){
+  return `${NOMS_JOURS_SEMAINE[d.getDay()===0?6:d.getDay()-1]} ${d.getDate()}`;
+}
+// Calcule l'offset de semaine correspondant à une date donnée par rapport à aujourd'hui
+function offsetDepuisDate(date){
+  const lundiCourant=getLundiCourant();
+  const lundiCible=new Date(date);
+  const day=lundiCible.getDay();
+  const diff=day===0?-6:1-day;
+  lundiCible.setDate(lundiCible.getDate()+diff);
+  lundiCible.setHours(0,0,0,0);
+  const diffJours=Math.round((lundiCible-lundiCourant)/(1000*60*60*24));
+  return Math.round(diffJours/7);
+}
 const VUES = ["Jour", "Calendrier"];
 
 const DEPARTEMENTS = {
@@ -492,69 +538,7 @@ function SecteurLabel({label,onRename}){
 }
 
 // ─── VUE SEMAINE ──────────────────────────────────────────────────────────────
-function VueSemaine({planning,commerciaux,jours,onRenameJour,onAdd,onRemove,onToggleConfirm,onEdit,estBloque,toggleBlocage}){
-  const thS={padding:"7px 5px",background:"#0f172a",color:"#fff",fontSize:11,fontWeight:700,textAlign:"center",border:"1px solid #1e293b",whiteSpace:"nowrap"};
-  const tdS={border:"1px solid #e2e8f0",padding:4,verticalAlign:"top",minWidth:120};
-  return(
-    <div style={{overflowX:"auto"}}>
-      <table style={{borderCollapse:"collapse",width:"100%"}}>
-        <colgroup><col style={{width:68}}/>{commerciaux.map((_,i)=><col key={i}/>)}</colgroup>
-        <thead>
-          <tr>
-            <th style={thS}>Créneau</th>
-            {jours.map((j,ji)=>(
-              <th key={j} colSpan={commerciaux.length} style={{...thS,borderBottom:"2px solid #3B82F6"}}>
-                <JourLabel label={j} onRename={v=>onRenameJour(ji,v)}/>
-              </th>
-            ))}
-          </tr>
-          <tr>
-            <th style={{...thS,fontSize:9,color:"#64748b",background:"#1e293b"}}></th>
-            {jours.map(j=>commerciaux.map(c=>(
-              <th key={`${j}-${c}`} style={{...thS,fontSize:10,fontWeight:600,color:"#94a3b8",background:"#1e293b"}}>{c}</th>
-            )))}
-          </tr>
-        </thead>
-        <tbody>
-          {CRENEAUX.map(cr=>(
-            <tr key={cr}>
-              <td style={{...tdS,background:"#1e293b",color:"#fff",fontWeight:700,fontSize:11,textAlign:"center",position:"relative",whiteSpace:"nowrap"}}>{cr}</td>
-              {jours.map(j=>commerciaux.map(c=>{
-                const rdvs=(planning[j]?.[cr]||[]).filter(r=>r.commercial===c);
-                return(
-                  <td key={`${j}-${c}`} style={tdS}>
-                    {estBloque(j,cr,c)?(
-                      <div style={{background:"#1e293b",borderRadius:8,minHeight:36,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"4px 8px",cursor:"pointer"}} onClick={()=>toggleBlocage(j,cr,c)} title="Cliquer pour débloquer">
-                        <span style={{fontSize:10,color:"#475569",fontWeight:600}}>🔒 Bloqué</span>
-                        <span style={{fontSize:9,color:"#64748b"}}>débloquer</span>
-                      </div>
-                    ):(
-                      <>
-                        {rdvs.map(rdv=>(
-                          <RdvCard key={rdv.id} rdv={rdv} onRemove={()=>onRemove(j,cr,rdv.id)} onToggleConfirm={()=>onToggleConfirm(j,cr,rdv.id)} onEdit={()=>onEdit&&onEdit(j,cr,rdv)}/>
-                        ))}
-                        <div style={{display:"flex",gap:3}}>
-                          <button onClick={()=>onAdd(j,cr,c)}
-                            style={{flex:1,padding:"2px 0",background:"none",border:"1.5px dashed #e2e8f0",borderRadius:6,color:"#cbd5e1",fontSize:14,cursor:"pointer"}}
-                            onMouseEnter={e=>{e.currentTarget.style.borderColor="#3B82F6";e.currentTarget.style.color="#3B82F6";}}
-                            onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#cbd5e1";}}>+</button>
-
-                        </div>
-                      </>
-                    )}
-                  </td>
-                );
-              }))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// ─── VUE JOUR ─────────────────────────────────────────────────────────────────
-function VueJour({planning,commerciaux,jours,onRenameJour,jourActif,setJourActif,onAdd,onRemove,onToggleConfirm,onEdit,estBloque,toggleBlocage,seuils,marges,departements}){
+function VueJour({planning,commerciaux,jours,labelsJours,jourActif,setJourActif,onAdd,onRemove,onToggleConfirm,onEdit,estBloque,toggleBlocage,seuils,marges,departements}){
   const jourPlanning=planning[jourActif]||{};
   const trajetsByComm={};
   commerciaux.forEach(c=>{
@@ -593,7 +577,7 @@ function VueJour({planning,commerciaux,jours,onRenameJour,jourActif,setJourActif
       <div style={{display:"flex",gap:5,marginBottom:14,flexWrap:"wrap"}}>
         {jours.map((j,ji)=>(
           <button key={j} onClick={()=>setJourActif(j)} style={{padding:"7px 14px",borderRadius:10,border:"none",cursor:"pointer",fontWeight:700,fontSize:12,background:jourActif===j?"#0f172a":"#fff",color:jourActif===j?"#fff":"#64748b",boxShadow:jourActif===j?"0 2px 8px rgba(0,0,0,0.15)":"none"}}>
-            <JourLabel label={j} onRename={v=>{onRenameJour(ji,v);setJourActif(v);}}/>
+            {labelsJours[j]}
           </button>
         ))}
       </div>
@@ -653,7 +637,7 @@ function VueJour({planning,commerciaux,jours,onRenameJour,jourActif,setJourActif
 }
 
 // ─── VUE CALENDRIER ───────────────────────────────────────────────────────────
-function VueCalendrier({planning,commerciaux,jours,onRenameJour,filtreComm,setFiltreComm,filtreDept,setFiltreDept,onAdd,onRemove,onToggleConfirm,onEdit,secteurLabels,onRenameSecteur}){
+function VueCalendrier({planning,commerciaux,jours,labelsJours,filtreComm,setFiltreComm,filtreDept,setFiltreDept,onAdd,onRemove,onToggleConfirm,onEdit,secteurLabels,onRenameSecteur}){
   return(
     <div>
       <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
@@ -680,7 +664,7 @@ function VueCalendrier({planning,commerciaux,jours,onRenameJour,filtreComm,setFi
           return(
             <div key={j} style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.08)"}}>
               <div style={{background:"#1e293b",color:"#fff",fontWeight:800,fontSize:12,padding:"7px 10px",textAlign:"center"}}>
-                <JourLabel label={j} onRename={v=>onRenameJour(ji,v)}/>
+                {labelsJours[j]}
               </div>
 
               {/* Mini-tableau secteurs × créneaux */}
@@ -790,18 +774,27 @@ export default function App(){
   const[motDePasseInput,setMotDePasseInput]=useState("");
   const[erreurMdp,setErreurMdp]=useState(false);
   const[vue,setVue]=useState("Jour");
-  const[jours,setJours]=useState([...JOURS_DEFAULT]);
+  const[offsetSemaine,setOffsetSemaine]=useState(0);
+  const datesSemaine=useMemo(()=>getDatesSemaine(offsetSemaine),[offsetSemaine]);
+  const jours=useMemo(()=>datesSemaine.map(d=>dateKey(d)),[datesSemaine]);
+  const labelsJours=useMemo(()=>{
+    const m={};
+    datesSemaine.forEach(d=>{m[dateKey(d)]=dateLabel(d);});
+    return m;
+  },[datesSemaine]);
   const[commerciaux,setCommerciaux]=useState(["Commercial A","Commercial B","Commercial C","Commercial D"]);
   const[editingNom,setEditingNom]=useState(null);
   const[nomTemp,setNomTemp]=useState("");
-  const[planning,setPlanning]=useState(()=>emptyPlanning(JOURS_DEFAULT));
+  const[planning,setPlanning]=useState({});
   const[modal,setModal]=useState(null);
-  const[jourActif,setJourActif]=useState(JOURS_DEFAULT[0]);
+  const[jourActif,setJourActif]=useState(()=>dateKey(getDatesSemaine(0)[0]));
   const[filtreComm,setFiltreComm]=useState("");
   const[filtreDept,setFiltreDept]=useState("");
   const[showGererComm,setShowGererComm]=useState(false);
   const[showSuggestion,setShowSuggestion]=useState(false);
   const[showReglages,setShowReglages]=useState(false);
+  const[showAllerADate,setShowAllerADate]=useState(false);
+  const[dateInput,setDateInput]=useState("");
   const[seuils,setSeuils]=useState({proche:50,moyen:90});
   const[margesState,setMargesState]=useState({...MARGES});
   const[departements,setDepartements]=useState(JSON.parse(JSON.stringify(DEPARTEMENTS)));
@@ -811,7 +804,6 @@ export default function App(){
   const[editingMessage,setEditingMessage]=useState(false);
   const[messageTemp,setMessageTemp]=useState("");
   const[secteurLabels,setSecteurLabels]=useState({});
-  const[showConfirmNouvelleSemaine,setShowConfirmNouvelleSemaine]=useState(false);
 
   function renameSecteur(commercial,label){
     setSecteurLabels(prev=>({...prev,[commercial]:label}));
@@ -821,8 +813,7 @@ export default function App(){
 
   // Chargement initial depuis Supabase
   async function chargerTout(){
-    const[jD,cD,pD,sD,mD,dD,bD,msgD,slD]=await Promise.all([
-      loadData("jours"),
+    const[cD,pD,sD,mD,dD,bD,msgD,slD]=await Promise.all([
       loadData("commerciaux"),
       loadData("planning"),
       loadData("seuils"),
@@ -832,7 +823,6 @@ export default function App(){
       loadData("messageEquipe"),
       loadData("secteurLabels"),
     ]);
-    if(jD)setJours(jD);
     if(cD)setCommerciaux(cD);
     if(pD)setPlanning(pD);
     if(sD)setSeuils(sD);
@@ -879,19 +869,13 @@ export default function App(){
   }
 
   // Renommer un jour (met à jour la clé dans le planning)
-  function renameJour(idx,newLabel){
-    if(!newLabel.trim())return;
-    const old=jours[idx];
-    const newJours=jours.map((j,i)=>i===idx?newLabel.trim():j);
-    setJours(newJours);
-    setPlanning(prev=>{
-      const p={...prev};
-      p[newLabel.trim()]=p[old]||{};
-      CRENEAUX.forEach(cr=>{if(!p[newLabel.trim()][cr])p[newLabel.trim()][cr]=[];});
-      delete p[old];
-      return p;
-    });
-    if(jourActif===old)setJourActif(newLabel.trim());
+  function allerADate(dateStr){
+    if(!dateStr)return;
+    const d=new Date(dateStr+"T00:00:00");
+    if(isNaN(d.getTime()))return;
+    setOffsetSemaine(offsetDepuisDate(d));
+    setJourActif(dateKey(d));
+    setShowAllerADate(false);
   }
 
   function addCommercial(){
@@ -902,7 +886,7 @@ export default function App(){
     setCommerciaux(prev=>prev.filter(x=>x!==c));
     setPlanning(prev=>{
       const p=JSON.parse(JSON.stringify(prev));
-      jours.forEach(j=>CRENEAUX.forEach(cr=>{p[j][cr]=(p[j][cr]||[]).filter(r=>r.commercial!==c);}));
+      jours.forEach(j=>{if(!p[j])return;CRENEAUX.forEach(cr=>{p[j][cr]=(p[j][cr]||[]).filter(r=>r.commercial!==c);});});
       return p;
     });
   }
@@ -912,7 +896,7 @@ export default function App(){
     setCommerciaux(prev=>prev.map((n,i)=>i===idx?newName.trim():n));
     setPlanning(prev=>{
       const p=JSON.parse(JSON.stringify(prev));
-      jours.forEach(j=>CRENEAUX.forEach(cr=>{p[j][cr]=(p[j][cr]||[]).map(r=>r.commercial===old?{...r,commercial:newName.trim()}:r);}));
+      jours.forEach(j=>{if(!p[j])return;CRENEAUX.forEach(cr=>{p[j][cr]=(p[j][cr]||[]).map(r=>r.commercial===old?{...r,commercial:newName.trim()}:r);});});
       return p;
     });
     setEditingNom(null);
@@ -925,14 +909,6 @@ export default function App(){
     setModal(null);
   }
 
-  async function handleNouvelleSemaine(){
-    const dateArchive=new Date().toISOString().slice(0,10);
-    await saveData(`archive_planning_${dateArchive}`,planning);
-    setPlanning(emptyPlanning(jours));
-    setBlocages(new Set());
-    setMessageEquipe("");
-    setShowConfirmNouvelleSemaine(false);
-  }
   function handleSave(data){
     const{jour,rdvEdit}=modal;
     const creneauCible=data.creneau; // utilise le créneau choisi dans le formulaire, pas celui de la case cliquée
@@ -1019,15 +995,14 @@ export default function App(){
         setPlanning(prev=>({...prev,[jour]:{...prev[jour],[creneau]:[...(prev[jour][creneau]||[]),{id:newId(),commercial,creneau,dept:data.dept,ville:data.ville,client:"",codePostal:data.codePostal,coords:data.coords,confirme:false}]}}));
       }} commerciaux={commerciaux} jours={jours} planning={planning} estBloque={estBloque} seuils={seuils}/>}
       {showReglages&&<PanneauReglages seuils={seuils} setSeuils={setSeuils} marges={margesState} setMarges={setMargesState} onClose={()=>setShowReglages(false)}/>}
-      {showConfirmNouvelleSemaine&&(
+      {showAllerADate&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300}}>
-          <div style={{background:"#fff",borderRadius:16,padding:28,width:360,boxShadow:"0 8px 40px rgba(0,0,0,0.2)",textAlign:"center"}}>
-            <div style={{fontSize:32,marginBottom:8}}>📅</div>
-            <h3 style={{margin:"0 0 8px",fontSize:17,fontWeight:700,color:"#1e293b"}}>Démarrer une nouvelle semaine ?</h3>
-            <p style={{fontSize:13,color:"#64748b",margin:"0 0 20px"}}>Le planning actuel sera archivé (sauvegardé) puis entièrement vidé pour repartir à zéro. Cette action ne peut pas être annulée facilement.</p>
-            <div style={{display:"flex",gap:10}}>
-              <button onClick={()=>setShowConfirmNouvelleSemaine(false)} style={{flex:1,padding:"10px 0",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:600,fontSize:14,cursor:"pointer"}}>Annuler</button>
-              <button onClick={handleNouvelleSemaine} style={{flex:1,padding:"10px 0",borderRadius:8,border:"none",background:"#DC2626",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Oui, archiver et vider</button>
+          <div style={{background:"#fff",borderRadius:16,padding:28,width:320,boxShadow:"0 8px 40px rgba(0,0,0,0.2)"}}>
+            <h3 style={{margin:"0 0 16px",fontSize:17,fontWeight:700,color:"#1e293b",textAlign:"center"}}>🗓️ Aller à une date</h3>
+            <input type="date" value={dateInput} onChange={e=>setDateInput(e.target.value)} style={{...inputStyle,fontSize:15,padding:"10px"}} autoFocus/>
+            <div style={{display:"flex",gap:10,marginTop:16}}>
+              <button onClick={()=>setShowAllerADate(false)} style={{flex:1,padding:"10px 0",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:600,fontSize:14,cursor:"pointer"}}>Annuler</button>
+              <button onClick={()=>allerADate(dateInput)} style={{flex:1,padding:"10px 0",borderRadius:8,border:"none",background:"#3B82F6",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Aller</button>
             </div>
           </div>
         </div>
@@ -1037,13 +1012,24 @@ export default function App(){
         <h1 style={{fontSize:20,fontWeight:800,color:"#0f172a",margin:0}}>📅 Planning Commerciaux</h1>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           <div style={{background:"#D1FAE5",color:"#059669",borderRadius:8,padding:"5px 12px",fontWeight:800,fontSize:12}}>{totalRdv} RDV</div>
-          <div style={{background:"#DBEAFE",color:"#1D4ED8",borderRadius:8,padding:"5px 12px",fontWeight:800,fontSize:12}}>{jourActif} : {totalRdvJour} RDV</div>
+          <div style={{background:"#DBEAFE",color:"#1D4ED8",borderRadius:8,padding:"5px 12px",fontWeight:800,fontSize:12}}>{labelsJours[jourActif]||jourActif} : {totalRdvJour} RDV</div>
           <div style={{background:"#FEF3C7",color:"#D97706",borderRadius:8,padding:"5px 12px",fontWeight:800,fontSize:12}}>⭐ {totalConfirmesJour}</div>
           <button onClick={()=>setShowSuggestion(true)} style={{padding:"5px 12px",borderRadius:8,border:"none",background:"#3B82F6",cursor:"pointer",fontWeight:700,fontSize:12,color:"#fff"}}>🎯 Meilleur créneau</button>
           <button onClick={()=>setShowGererComm(v=>!v)} style={{padding:"5px 12px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",cursor:"pointer",fontWeight:600,fontSize:12,color:"#64748b"}}>👥 Commerciaux</button>
           <button onClick={()=>setShowReglages(true)} style={{padding:"5px 12px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",cursor:"pointer",fontWeight:600,fontSize:12,color:"#64748b"}}>⚙️ Réglages</button>
-          <button onClick={()=>setShowConfirmNouvelleSemaine(true)} style={{padding:"5px 12px",borderRadius:8,border:"1.5px solid #FCA5A5",background:"#FEF2F2",cursor:"pointer",fontWeight:700,fontSize:12,color:"#DC2626"}}>📅 Nouvelle semaine</button>
         </div>
+      </div>
+
+      {/* Navigation entre semaines */}
+      <div style={{maxWidth:1500,margin:"0 auto 12px",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <button onClick={()=>setOffsetSemaine(o=>o-1)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",cursor:"pointer",fontWeight:700,fontSize:13,color:"#1e293b"}}>← Semaine précédente</button>
+        <div style={{fontWeight:700,fontSize:13,color:"#0f172a",minWidth:160,textAlign:"center"}}>
+          {offsetSemaine===0?"Cette semaine":offsetSemaine>0?`Semaine +${offsetSemaine}`:`Semaine ${offsetSemaine}`}
+          <div style={{fontSize:10,color:"#94a3b8",fontWeight:500}}>{labelsJours[jours[0]]} → {labelsJours[jours[jours.length-1]]}</div>
+        </div>
+        <button onClick={()=>setOffsetSemaine(o=>o+1)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",cursor:"pointer",fontWeight:700,fontSize:13,color:"#1e293b"}}>Semaine suivante →</button>
+        {offsetSemaine!==0&&<button onClick={()=>setOffsetSemaine(0)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #3B82F6",background:"#EFF6FF",cursor:"pointer",fontWeight:700,fontSize:12,color:"#3B82F6"}}>Aujourd'hui</button>}
+        <button onClick={()=>setShowAllerADate(true)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",cursor:"pointer",fontWeight:600,fontSize:12,color:"#64748b"}}>🗓️ Aller à une date</button>
       </div>
 
       {showGererComm&&(
@@ -1119,8 +1105,8 @@ export default function App(){
       </div>
 
       <div style={{maxWidth:1500,margin:"0 auto"}}>
-        {vue==="Jour"&&<VueJour planning={planning} commerciaux={commerciaux} jours={jours} onRenameJour={renameJour} jourActif={jourActif} setJourActif={setJourActif} onAdd={handleAdd} onRemove={handleRemove} onToggleConfirm={handleToggleConfirm} onEdit={handleEdit} estBloque={estBloque} toggleBlocage={toggleBlocage} seuils={seuils}/>}
-        {vue==="Calendrier"&&<VueCalendrier planning={planning} commerciaux={commerciaux} jours={jours} onRenameJour={renameJour} filtreComm={filtreComm} setFiltreComm={setFiltreComm} filtreDept={filtreDept} setFiltreDept={setFiltreDept} onAdd={handleAdd} onRemove={handleRemove} onToggleConfirm={handleToggleConfirm} onEdit={handleEdit} secteurLabels={secteurLabels} onRenameSecteur={renameSecteur}/>}
+        {vue==="Jour"&&<VueJour planning={planning} commerciaux={commerciaux} jours={jours} labelsJours={labelsJours} jourActif={jourActif} setJourActif={setJourActif} onAdd={handleAdd} onRemove={handleRemove} onToggleConfirm={handleToggleConfirm} onEdit={handleEdit} estBloque={estBloque} toggleBlocage={toggleBlocage} seuils={seuils}/>}
+        {vue==="Calendrier"&&<VueCalendrier planning={planning} commerciaux={commerciaux} jours={jours} labelsJours={labelsJours} filtreComm={filtreComm} setFiltreComm={setFiltreComm} filtreDept={filtreDept} setFiltreDept={setFiltreDept} onAdd={handleAdd} onRemove={handleRemove} onToggleConfirm={handleToggleConfirm} onEdit={handleEdit} secteurLabels={secteurLabels} onRenameSecteur={renameSecteur}/>}
       </div>
 
       <div style={{maxWidth:1500,margin:"12px auto 0",padding:"8px 14px",background:"#fff",borderRadius:10,fontSize:10,color:"#94a3b8"}}>
