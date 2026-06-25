@@ -811,6 +811,7 @@ export default function App(){
   const[editingMessage,setEditingMessage]=useState(false);
   const[messageTemp,setMessageTemp]=useState("");
   const[secteurLabels,setSecteurLabels]=useState({});
+  const[showConfirmNouvelleSemaine,setShowConfirmNouvelleSemaine]=useState(false);
 
   function renameSecteur(commercial,label){
     setSecteurLabels(prev=>({...prev,[commercial]:label}));
@@ -923,6 +924,15 @@ export default function App(){
     if(modal?.rdvEdit){handleRemove(modal.jour,modal.creneau,modal.rdvEdit.id);}
     setModal(null);
   }
+
+  async function handleNouvelleSemaine(){
+    const dateArchive=new Date().toISOString().slice(0,10);
+    await saveData(`archive_planning_${dateArchive}`,planning);
+    setPlanning(emptyPlanning(jours));
+    setBlocages(new Set());
+    setMessageEquipe("");
+    setShowConfirmNouvelleSemaine(false);
+  }
   function handleSave(data){
     const{jour,rdvEdit}=modal;
     const creneauCible=data.creneau; // utilise le créneau choisi dans le formulaire, pas celui de la case cliquée
@@ -1009,6 +1019,19 @@ export default function App(){
         setPlanning(prev=>({...prev,[jour]:{...prev[jour],[creneau]:[...(prev[jour][creneau]||[]),{id:newId(),commercial,creneau,dept:data.dept,ville:data.ville,client:"",codePostal:data.codePostal,coords:data.coords,confirme:false}]}}));
       }} commerciaux={commerciaux} jours={jours} planning={planning} estBloque={estBloque} seuils={seuils}/>}
       {showReglages&&<PanneauReglages seuils={seuils} setSeuils={setSeuils} marges={margesState} setMarges={setMargesState} onClose={()=>setShowReglages(false)}/>}
+      {showConfirmNouvelleSemaine&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300}}>
+          <div style={{background:"#fff",borderRadius:16,padding:28,width:360,boxShadow:"0 8px 40px rgba(0,0,0,0.2)",textAlign:"center"}}>
+            <div style={{fontSize:32,marginBottom:8}}>📅</div>
+            <h3 style={{margin:"0 0 8px",fontSize:17,fontWeight:700,color:"#1e293b"}}>Démarrer une nouvelle semaine ?</h3>
+            <p style={{fontSize:13,color:"#64748b",margin:"0 0 20px"}}>Le planning actuel sera archivé (sauvegardé) puis entièrement vidé pour repartir à zéro. Cette action ne peut pas être annulée facilement.</p>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setShowConfirmNouvelleSemaine(false)} style={{flex:1,padding:"10px 0",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:600,fontSize:14,cursor:"pointer"}}>Annuler</button>
+              <button onClick={handleNouvelleSemaine} style={{flex:1,padding:"10px 0",borderRadius:8,border:"none",background:"#DC2626",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Oui, archiver et vider</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{maxWidth:1500,margin:"0 auto 10px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
         <h1 style={{fontSize:20,fontWeight:800,color:"#0f172a",margin:0}}>📅 Planning Commerciaux</h1>
@@ -1019,6 +1042,7 @@ export default function App(){
           <button onClick={()=>setShowSuggestion(true)} style={{padding:"5px 12px",borderRadius:8,border:"none",background:"#3B82F6",cursor:"pointer",fontWeight:700,fontSize:12,color:"#fff"}}>🎯 Meilleur créneau</button>
           <button onClick={()=>setShowGererComm(v=>!v)} style={{padding:"5px 12px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",cursor:"pointer",fontWeight:600,fontSize:12,color:"#64748b"}}>👥 Commerciaux</button>
           <button onClick={()=>setShowReglages(true)} style={{padding:"5px 12px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",cursor:"pointer",fontWeight:600,fontSize:12,color:"#64748b"}}>⚙️ Réglages</button>
+          <button onClick={()=>setShowConfirmNouvelleSemaine(true)} style={{padding:"5px 12px",borderRadius:8,border:"1.5px solid #FCA5A5",background:"#FEF2F2",cursor:"pointer",fontWeight:700,fontSize:12,color:"#DC2626"}}>📅 Nouvelle semaine</button>
         </div>
       </div>
 
