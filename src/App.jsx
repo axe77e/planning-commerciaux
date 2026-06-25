@@ -156,6 +156,33 @@ function formatTemps(min){if(min<60)return`${min}mn`;const h=Math.floor(min/60),
 
 // ─── OPENROUTESERVICE (trajets routiers réels) ───────────────────────────────
 const ORS_API_KEY="eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjI2YWQyMzg0MjMzYzRjMDU4MjNiOTYxN2IwMzRmM2ZmIiwiaCI6Im11cm11cjY0In0=";
+const geocodeCache={}; // clé "ville|codePostal" -> [lat,lng] ou null
+
+async function geocoderAdresse(ville,codePostal){
+  const cleanVille=(ville||"").trim();
+  const cleanCP=(codePostal||"").trim();
+  if(!cleanVille&&!cleanCP)return null;
+  const cacheKey=`${cleanVille.toLowerCase()}|${cleanCP}`;
+  if(geocodeCache[cacheKey]!==undefined)return geocodeCache[cacheKey];
+  try{
+    const query=cleanVille?`${cleanVille} ${cleanCP} France`:`${cleanCP} France`;
+    const url=`https://api.openrouteservice.org/geocode/search?api_key=${ORS_API_KEY}&text=${encodeURIComponent(query)}&boundary.country=FR&size=1`;
+    const res=await fetch(url);
+    if(!res.ok)throw new Error("geocode error");
+    const data=await res.json();
+    if(data.features&&data.features.length>0){
+      const[lng,lat]=data.features[0].geometry.coordinates;
+      const coords=[lat,lng];
+      geocodeCache[cacheKey]=coords;
+      return coords;
+    }
+    geocodeCache[cacheKey]=null;
+    return null;
+  }catch(e){
+    geocodeCache[cacheKey]=null;
+    return null;
+  }
+}
 const trajetCache={}; // clé "lat1,lng1->lat2,lng2" -> minutes (ou en cours de calcul)
 
 function cleCache(a,b){return`${a[0].toFixed(4)},${a[1].toFixed(4)}->${b[0].toFixed(4)},${b[1].toFixed(4)}`;}
@@ -239,10 +266,29 @@ function ModalRdv({onClose,onSave,onDelete,commerciaux,defaultComm,defaultCrenea
   },[ville]);
   const dept=deptFromCodePostal(codePostal);
   const codePostalComplet=codePostal.length===5;
-  const coordsParCP=codePostalComplet?findCoordsByPostal(codePostal):null;
-  const coordsParVille=ville.length>2?findCoords(ville):null;
-  // Priorité : code postal complet (précis) > ville reconnue > centre département (fallback)
-  const coords=coordsParCP||coordsParVille||null;
+  const[coords,setCoords]=useState(rdvEdit?.coords||null);
+  const[geoEnCours,setGeoEnCours]=useState(false);
+  const[geoStatut,setGeoStatut]=useState(rdvEdit?.coords?"ok":null); // null | "loading" | "ok" | "fail"
+
+  // Géocodage réel dès que ville ET code postal complet sont disponibles (avec debounce)
+  useEffect(()=>{
+    if(!codePostalComplet){setGeoStatut(null);return;}
+    setGeoStatut("loading");
+    const timeout=setTimeout(async()=>{
+      setGeoEnCours(true);
+      const result=await geocoderAdresse(ville,codePostal);
+      setGeoEnCours(false);
+      if(result){
+        setCoords(result);
+        setGeoStatut("ok");
+      } else {
+        setCoords(findCoordsByPostal(codePostal)||findCoords(ville)||null);
+        setGeoStatut("fail");
+      }
+    },600);
+    return ()=>clearTimeout(timeout);
+  },[ville,codePostal,codePostalComplet]);
+
   const valide=!!dept;
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}>
@@ -282,6 +328,9 @@ function ModalRdv({onClose,onSave,onDelete,commerciaux,defaultComm,defaultCrenea
             </div>
           )}
         </div>
+        {geoStatut==="loading"&&<div style={{fontSize:11,marginTop:4,color:"#94a3b8"}}>⏳ Localisation en cours...</div>}
+        {geoStatut==="ok"&&<div style={{fontSize:11,marginTop:4,color:"#10B981"}}>✓ Adresse localisée précisément</div>}
+        {geoStatut==="fail"&&<div style={{fontSize:11,marginTop:4,color:"#F59E0B"}}>⚠️ Adresse introuvable — position approximative utilisée</div>}
         <label style={labelStyle}>Nom du client</label>
         <input value={client} onChange={e=>setClient(e.target.value)} placeholder="ex : M. Dupont" style={{...inputStyle,fontSize:12,padding:"6px 9px"}}/>
         <div style={{display:"flex",gap:10,marginTop:20}}>
@@ -290,7 +339,7 @@ function ModalRdv({onClose,onSave,onDelete,commerciaux,defaultComm,defaultCrenea
           ):(
             <button onClick={onClose} style={{flex:1,padding:"10px 0",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:600,fontSize:14,cursor:"pointer"}}>Annuler</button>
           )}
-          <button onClick={()=>valide&&onSave({id:rdvEdit?.id||newId(),commercial,creneau,dept,ville,client,codePostal,coords,confirme:rdvEdit?.confirme||false})} style={{flex:1,padding:"10px 0",borderRadius:8,border:"none",background:"#3B82F6",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",opacity:valide?1:0.4}} disabled={!valide}>{isEdit?"Enregistrer":"Placer"}</button>
+          <button onClick={()=>valide&&!geoEnCours&&onSave({id:rdvEdit?.id||newId(),commercial,creneau,dept,ville,client,codePostal,coords,confirme:rdvEdit?.confirme||false})} style={{flex:1,padding:"10px 0",borderRadius:8,border:"none",background:"#3B82F6",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",opacity:(valide&&!geoEnCours)?1:0.4}} disabled={!valide||geoEnCours}>{geoEnCours?"Localisation...":isEdit?"Enregistrer":"Placer"}</button>
         </div>
         {isEdit&&<button onClick={onClose} style={{width:"100%",marginTop:8,padding:"6px 0",background:"none",border:"none",color:"#94a3b8",fontSize:12,cursor:"pointer"}}>Annuler</button>}
       </div>
